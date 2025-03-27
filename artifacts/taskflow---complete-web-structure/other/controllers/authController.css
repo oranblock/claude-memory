@@ -1,0 +1,142 @@
+typescriptCopyimport { Request, Response, NextFunction } from 'express';
+import { User } from '../models/User';
+import { UserService } from '../services/userService';
+import { generateToken, verifyToken } from '../utils/jwt';
+import { hashPassword, comparePasswords } from '../utils/password';
+import { BadRequestError, UnauthorizedError } from '../utils/errors';
+import { RegisterUserDto, LoginUserDto } from '../types/auth';
+import { StatusCodes } from 'http-status-codes';
+
+/**
+ * Authentication controller for user registration, login, and token verification
+ */
+export class AuthController {
+  private userService: UserService;
+
+  constructor() {
+    this.userService = new UserService();
+  }
+
+  /**
+   * Register a new user
+   */
+  public register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { name, email, password }: RegisterUserDto = req.body;
+
+      // Check if user already exists
+      const existingUser = await this.userService.findByEmail(email);
+      if (existingUser) {
+        throw new BadRequestError('User with this email already exists');
+      }
+
+      // Hash password and create user
+      const hashedPassword = await hashPassword(password);
+      const user = await this.userService.create({
+        name,
+        email,
+        password: hashedPassword,
+      });
+
+      // Generate JWT token
+      const token = generateToken({ id: user.id });
+
+      // Set token in secure HTTP-only cookie
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
+
+      // Return user data without sensitive information
+      res.status(StatusCodes.CREATED).json({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        createdAt: user.createdAt,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * Login existing user
+   */
+  public login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { email, password }: LoginUserDto = req.body;
+
+      // Check if user exists
+      const user = await this.userService.findByEmail(email);
+      if (!user) {
+        throw new UnauthorizedError('Invalid email or password');
+      }
+
+      // Verify password
+      const isPasswordValid = await comparePasswords(password, user.password);
+      if (!isPasswordValid) {
+        throw new UnauthorizedError('Invalid email or password');
+      }
+
+      // Generate JWT token
+      const token = generateToken({ id: user.id });
+
+      // Set token in secure HTTP-only cookie
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
+
+      // Return user data without sensitive information
+      res.status(StatusCodes.OK).json({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        createdAt: user.createdAt,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * Logout user by clearing token cookie
+   */
+  public logout = (req: Request, res: Response): void => {
+    res.clearCookie('token');
+    res.status(StatusCodes.OK).json({ message: 'Logged out successfully' });
+  };
+
+  /**
+   * Get current user information
+   */
+  public getCurrentUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user?.id;
+
+      if (!userId) {
+        throw new UnauthorizedError('Not authenticated');
+      }
+
+      const user = await this.userService.findById(userId);
+
+      if (!user) {
+        throw new UnauthorizedError('User not found');
+      }
+
+      // Return user data without sensitive information
+      res.status(StatusCodes.OK).json({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        createdAt: user.createdAt,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+}
