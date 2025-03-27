@@ -1,5 +1,0 @@
-I apologize for the confusion! Here's how to properly fix the issue:
-
-The key fix in this function is:
-
-This should solve the issue where it was only capturing the filename instead of the full content.
