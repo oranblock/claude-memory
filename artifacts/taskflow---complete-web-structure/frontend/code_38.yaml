@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # Frontend React application
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    container_name: taskflow-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - taskflow-network
+
+  # Backend Express API
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: taskflow-backend
+    ports:
+      - "5000:5000"
+    depends_on:
+      - mongodb
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongodb:27017/taskflow
+    restart: unless-stopped
+    networks:
+      - taskflow-network
+
+  # MongoDB database
+  mongodb:
+    image: mongo:6
+    container_name: taskflow-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=taskflow
+    restart: unless-stopped
+    networks:
+      - taskflow-network
+
+# Docker volumes
+volumes:
+  mongodb_data:
+    name: taskflow-mongodb-data
+
+# Docker networks
+networks:
+  taskflow-network:
+    name: taskflow-network
+    driver: bridge
