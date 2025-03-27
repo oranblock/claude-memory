@@ -1,0 +1,6 @@
+jsonCopy{
+  "name": "Artifact Test",
+  "type": "multi-artifact",
+  "status": "testing",
+  "items": [1, 2, 3, 4]
+}
