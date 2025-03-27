@@ -1,0 +1,240 @@
+yamlCopy# Data Pipeline Configuration
+version: 2.1
+name: "Analytics Data Processing Pipeline"
+description: "Configuration for the core data processing pipeline"
+
+# Global environment settings
+environment:
+  runtime: "python3.10"
+  memory: 4096
+  timeout: 600
+  vpc:
+    securityGroupIds:
+      - "sg-0abc123def456"
+    subnetIds:
+      - "subnet-0abc123def456"
+      - "subnet-0def456abc123"
+  variables:
+    LOG_LEVEL: "INFO"
+    ENABLE_MONITORING: "true"
+    NOTIFICATION_EMAIL: "alerts@example.com"
+    MAX_RETRIES: 3
+
+# Input data sources configuration
+dataSources:
+  - name: "user_activity"
+    type: "database"
+    engine: "postgresql"
+    config:
+      host: "${DATABASE_HOST}"
+      port: 5432
+      database: "analytics"
+      schema: "user_data"
+      tables:
+        - "sessions"
+        - "events"
+        - "conversions"
+      credentials: "${DB_CREDENTIALS_SECRET}"
+      connectionPoolSize: 10
+      queryTimeout: 30
+      
+  - name: "product_catalog"
+    type: "s3"
+    config:
+      bucket: "example-analytics-data"
+      prefix: "catalog/"
+      format: "parquet"
+      compression: "snappy"
+      region: "us-west-2"
+      
+  - name: "marketing_campaigns"
+    type: "api"
+    config:
+      endpoint: "https://api.marketing.example.com/v2/campaigns"
+      method: "GET"
+      headers:
+        Authorization: "Bearer ${MARKETING_API_TOKEN}"
+        Content-Type: "application/json"
+      rateLimit: 100
+      pagination:
+        type: "cursor"
+        limitParam: "limit"
+        cursorParam: "cursor"
+        limit: 1000
+
+# Processing stages
+stages:
+  - name: "data_extraction"
+    type: "extractor"
+    description: "Extract data from various sources"
+    dependsOn: []
+    config:
+      parallel: true
+      sourcesToExtract:
+        - "user_activity"
+        - "product_catalog"
+        - "marketing_campaigns"
+      outputPath: "${DATA_LAKE_PATH}/raw/"
+      partitioning:
+        type: "time"
+        field: "created_at"
+        format: "yyyy/MM/dd"
+        
+  - name: "data_validation"
+    type: "validator"
+    description: "Validate data quality and schema"
+    dependsOn: ["data_extraction"]
+    config:
+      rulesPath: "${CONFIG_PATH}/validation_rules.json"
+      failOnError: false
+      outputReportPath: "${REPORTS_PATH}/validation/"
+      notifyOnFailure: true
+      
+  - name: "data_transformation"
+    type: "transformer"
+    description: "Transform raw data into analysis-ready datasets"
+    dependsOn: ["data_validation"]
+    config:
+      transformationsPath: "${CONFIG_PATH}/transformations/"
+      sparkConfig:
+        executor.instances: 5
+        executor.memory: "4g"
+        driver.memory: "2g"
+      outputPath: "${DATA_LAKE_PATH}/transformed/"
+      
+  - name: "data_enrichment"
+    type: "enricher"
+    description: "Enrich data with additional information"
+    dependsOn: ["data_transformation"]
+    config:
+      enrichmentSources:
+        - name: "geolocation"
+          type: "api"
+          endpoint: "https://api.geo.example.com/v1/lookup"
+          fields:
+            - name: "ip_address"
+              targetField: "location"
+        - name: "product_details"
+          type: "join"
+          leftDataset: "user_events"
+          rightDataset: "product_catalog"
+          joinCondition: "user_events.product_id = product_catalog.id"
+      outputPath: "${DATA_LAKE_PATH}/enriched/"
+        
+  - name: "data_aggregation"
+    type: "aggregator"
+    description: "Create pre-aggregated datasets for reporting"
+    dependsOn: ["data_enrichment"]
+    config:
+      aggregations:
+        - name: "daily_user_metrics"
+          source: "user_activity"
+          dimensions: ["date", "country", "device_type", "traffic_source"]
+          measures:
+            - name: "session_count"
+              function: "count"
+              field: "session_id"
+            - name: "active_users"
+              function: "count_distinct"
+              field: "user_id"
+            - name: "total_duration"
+              function: "sum"
+              field: "duration_seconds"
+            - name: "conversion_rate"
+              function: "custom"
+              formula: "sum(case when converted then 1 else 0 end) / count(distinct user_id)"
+        - name: "product_performance"
+          source: "enriched_events"
+          dimensions: ["date", "product_category", "product_id"]
+          measures:
+            - name: "view_count"
+              function: "count_if"
+              condition: "event_type = 'view'"
+            - name: "purchase_count"
+              function: "count_if"
+              condition: "event_type = 'purchase'"
+      outputPath: "${DATA_WAREHOUSE_PATH}/aggregated/"
+      schedule: "0 */3 * * *"  # Every 3 hours
+
+# Output destinations
+destinations:
+  - name: "data_warehouse"
+    type: "snowflake"
+    config:
+      account: "${SNOWFLAKE_ACCOUNT}"
+      warehouse: "ANALYTICS_WH"
+      database: "ANALYTICS"
+      schema: "REPORTING"
+      role: "LOADER_ROLE"
+      credentials: "${SNOWFLAKE_CREDENTIALS_SECRET}"
+      stages:
+        - source: "${DATA_WAREHOUSE_PATH}/aggregated/daily_user_metrics/"
+          target: "DAILY_USER_METRICS"
+        - source: "${DATA_WAREHOUSE_PATH}/aggregated/product_performance/"
+          target: "PRODUCT_PERFORMANCE"
+      
+  - name: "dashboards"
+    type: "tableau"
+    config:
+      site: "analytics"
+      project: "Executive Dashboards"
+      credentials: "${TABLEAU_CREDENTIALS_SECRET}"
+      refreshSchedule: "0 6 * * *"  # Daily at 6 AM
+
+# Monitoring and alerting
+monitoring:
+  metrics:
+    - name: "pipeline_execution_time"
+      description: "Total pipeline execution time"
+      unit: "seconds"
+      
+    - name: "records_processed"
+      description: "Number of records processed"
+      dimensions: ["stage", "source"]
+      
+    - name: "error_count"
+      description: "Number of errors encountered"
+      dimensions: ["stage", "error_type"]
+      thresholds:
+        critical: 100
+        warning: 10
+  
+  logging:
+    level: "${LOG_LEVEL}"
+    destination: "cloudwatch"
+    logGroupName: "/data-pipeline/analytics"
+    retention: 30
+  
+  alerting:
+    email:
+      recipients:
+        - "${NOTIFICATION_EMAIL}"
+        - "data-team@example.com"
+      
+    pagerDuty:
+      serviceKey: "${PAGERDUTY_SERVICE_KEY}"
+      escalationPolicy: "P456789"
+
+# Security configuration
+security:
+  encryption:
+    atRest: true
+    inTransit: true
+    kmsKeyId: "${KMS_KEY_ID}"
+    
+  authentication:
+    iamRole: "arn:aws:iam::123456789012:role/AnalyticsPipelineRole"
+    
+  authorization:
+    dataAccess:
+      - resource: "user_activity"
+        roles: ["data_analyst", "data_scientist"]
+      - resource: "product_catalog"
+        roles: ["data_analyst", "data_scientist", "product_manager"]
+
+# Disaster recovery
+disasterRecovery:
+  backupSchedule: "0 0 * * *"  # Daily at midnight
+  backupRetention: 30  # days
+  recoveryPointObjective: 24  # hours
+  recoveryTimeObjective: 4  # hours
