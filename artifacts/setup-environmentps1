@@ -1,0 +1,15 @@
+# setup-environment.ps1
+param (
+    [string]$Environment = "development",
+    [string]$ConfigPath = ".\config"
+)
+
+Write-Host "Setting up $Environment environment..."
+
+# Create necessary directories
+New-Item -Path "$ConfigPath\$Environment" -ItemType Directory -Force
+
+# Copy configuration files
+Copy-Item -Path ".\templates\$Environment\*" -Destination "$ConfigPath\$Environment" -Recurse -Force
+
+Write-Host "Environment setup complete!"
