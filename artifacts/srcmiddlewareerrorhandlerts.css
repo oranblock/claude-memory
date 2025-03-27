@@ -1,0 +1,82 @@
+typescriptCopyimport { Request, Response, NextFunction } from 'express';
+import { StatusCodes } from 'http-status-codes';
+import { 
+  BaseError, 
+  BadRequestError, 
+  UnauthorizedError, 
+  ForbiddenError, 
+  NotFoundError 
+} from '../utils/errors';
+
+/**
+ * Global error handling middleware
+ */
+export const errorHandler = (
+  err: Error,
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  console.error('Error:', err);
+
+  // Handle custom error types
+  if (err instanceof BaseError) {
+    return res.status(err.statusCode).json({
+      error: {
+        message: err.message,
+        code: err.code,
+      },
+    });
+  }
+
+  // Handle mongoose validation errors
+  if (err.name === 'ValidationError') {
+    return res.status(StatusCodes.BAD_REQUEST).json({
+      error: {
+        message: 'Validation error',
+        details: err.message,
+        code: 'VALIDATION_ERROR',
+      },
+    });
+  }
+
+  // Handle MongoDB duplicate key errors
+  if (err.name === 'MongoError' && (err as any).code === 11000) {
+    return res.status(StatusCodes.CONFLICT).json({
+      error: {
+        message: 'Duplicate resource',
+        details: 'A resource with the provided data already exists',
+        code: 'DUPLICATE_RESOURCE',
+      },
+    });
+  }
+
+  // Handle JWT errors
+  if (err.name === 'JsonWebTokenError') {
+    return res.status(StatusCodes.UNAUTHORIZED).json({
+      error: {
+        message: 'Invalid token',
+        code: 'INVALID_TOKEN',
+      },
+    });
+  }
+
+  if (err.name === 'TokenExpiredError') {
+    return res.status(StatusCodes.UNAUTHORIZED).json({
+      error: {
+        message: 'Token expired',
+        code: 'TOKEN_EXPIRED',
+      },
+    });
+  }
+
+  // Default to 500 server error
+  return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+    error: {
+      message: process.env.NODE_ENV === 'production'
+        ? 'Internal server error'
+        : err.message || 'Internal server error',
+      code: 'INTERNAL_SERVER_ERROR',
+    },
+  });
+};
