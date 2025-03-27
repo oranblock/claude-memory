@@ -1,0 +1,194 @@
+tsxCopyimport React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { useTasks } from '../contexts/TaskContext';
+import { Task, TaskFilter } from '../types/task';
+import TaskList from '../components/tasks/TaskList';
+import TaskFilterPanel from '../components/tasks/TaskFilterPanel';
+import TaskCreateModal from '../components/tasks/TaskCreateModal';
+import TaskEditModal from '../components/tasks/TaskEditModal';
+import Button from '../components/ui/Button';
+import PageHeader from '../components/layout/PageHeader';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
+import EmptyState from '../components/ui/EmptyState';
+import { PlusIcon } from '@heroicons/react/outline';
+
+/**
+ * Dashboard page component that displays tasks and task management UI
+ */
+const Dashboard: React.FC = () => {
+  const { user } = useAuth();
+  const { 
+    tasks, 
+    isLoading, 
+    error, 
+    fetchTasks, 
+    completeTask, 
+    deleteTask 
+  } = useTasks();
+  
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [currentTask, setCurrentTask] = useState<Task | null>(null);
+  const [filters, setFilters] = useState<TaskFilter>({
+    status: [],
+    priority: [],
+    category: [],
+    search: '',
+  });
+  
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
+  
+  // Filter tasks based on selected filters
+  const filteredTasks = tasks.filter((task) => {
+    // Status filter
+    if (filters.status.length > 0 && !filters.status.includes(task.status)) {
+      return false;
+    }
+    
+    // Priority filter
+    if (filters.priority.length > 0 && !filters.priority.includes(task.priority)) {
+      return false;
+    }
+    
+    // Category filter
+    if (filters.category.length > 0 && !filters.category.includes(task.category.id)) {
+      return false;
+    }
+    
+    // Search filter
+    if (filters.search && !task.title.toLowerCase().includes(filters.search.toLowerCase())) {
+      return false;
+    }
+    
+    return true;
+  });
+  
+  const handleEditTask = (task: Task) => {
+    setCurrentTask(task);
+    setIsEditModalOpen(true);
+  };
+  
+  const handleTaskComplete = async (id: string) => {
+    try {
+      await completeTask(id);
+    } catch (err) {
+      console.error('Failed to complete task:', err);
+    }
+  };
+  
+  const handleTaskDelete = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this task?')) {
+      try {
+        await deleteTask(id);
+      } catch (err) {
+        console.error('Failed to delete task:', err);
+      }
+    }
+  };
+  
+  if (isLoading) {
+    return <LoadingSpinner size="lg" />;
+  }
+  
+  if (error) {
+    return (
+      <div className="p-4 bg-red-100 text-red-700 rounded-md">
+        <p>Error loading tasks: {error}</p>
+        <Button variant="primary" onClick={() => fetchTasks()} className="mt-2">
+          Retry
+        </Button>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <PageHeader
+        title={`Welcome, ${user?.name || 'User'}`}
+        description="Manage your tasks and stay productive"
+        actions={
+          <Button
+            variant="primary"
+            leftIcon={<PlusIcon className="h-5 w-5" />}
+            onClick={() => setIsCreateModalOpen(true)}
+          >
+            Add Task
+          </Button>
+        }
+      />
+      
+      <div className="mt-8 grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="lg:col-span-1">
+          <TaskFilterPanel filters={filters} onFilterChange={setFilters} />
+        </div>
+        
+        <div className="lg:col-span-3">
+          {filteredTasks.length === 0 ? (
+            <EmptyState
+              title="No tasks found"
+              description={
+                tasks.length === 0
+                  ? "You don't have any tasks yet. Create your first task to get started!"
+                  : "No tasks match your current filters. Try adjusting your filters to see more tasks."
+              }
+              action={
+                tasks.length === 0 ? (
+                  <Button
+                    variant="primary"
+                    onClick={() => setIsCreateModalOpen(true)}
+                  >
+                    Create First Task
+                  </Button>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    onClick={() => setFilters({
+                      status: [],
+                      priority: [],
+                      category: [],
+                      search: '',
+                    })}
+                  >
+                    Clear Filters
+                  </Button>
+                )
+              }
+            />
+          ) : (
+            <TaskList
+              tasks={filteredTasks}
+              onComplete={handleTaskComplete}
+              onEdit={handleEditTask}
+              onDelete={handleTaskDelete}
+            />
+          )}
+        </div>
+      </div>
+      
+      {/* Task Creation Modal */}
+      <TaskCreateModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+      />
+      
+      {/* Task Edit Modal */}
+      {currentTask && (
+        <TaskEditModal
+          isOpen={isEditModalOpen}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setCurrentTask(null);
+          }}
+          task={currentTask}
+        />
+      )}
+    </div>
+  );
+};
+
+export default Dashboard;
