@@ -1,0 +1,1 @@
+Claude hit the max length for a message and has paused its response. You can write Continue to keep the chat going.
