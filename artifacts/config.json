@@ -1,0 +1,16 @@
+// config.json
+{
+  "appName": "SampleApplication",
+  "version": "1.0.0",
+  "environment": "development",
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "name": "sample_db",
+    "user": "${DB_USER}",
+    "maxConnections": 10
+  },
+  "logging": {
+    "level": "info"
+  }
+}
