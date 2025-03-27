@@ -1,0 +1,157 @@
+sqlCopy-- User Management Schema for Analytics Platform
+
+-- Users table
+CREATE TABLE users (
+    user_id SERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    first_name VARCHAR(50),
+    last_name VARCHAR(50),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_login TIMESTAMP,
+    account_status VARCHAR(20) NOT NULL DEFAULT 'active',
+    account_type VARCHAR(20) NOT NULL DEFAULT 'standard',
+    CONSTRAINT chk_account_status CHECK (account_status IN ('active', 'inactive', 'suspended', 'deleted')),
+    CONSTRAINT chk_account_type CHECK (account_type IN ('standard', 'premium', 'enterprise', 'admin'))
+);
+
+-- User profiles with additional information
+CREATE TABLE user_profiles (
+    profile_id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    company VARCHAR(100),
+    job_title VARCHAR(100),
+    industry VARCHAR(100),
+    phone VARCHAR(30),
+    country VARCHAR(50),
+    timezone VARCHAR(50),
+    language_preference VARCHAR(10) DEFAULT 'en',
+    notification_preferences JSONB,
+    bio TEXT,
+    profile_picture_url VARCHAR(255),
+    CONSTRAINT unique_user_profile UNIQUE (user_id)
+);
+
+-- Subscription plans
+CREATE TABLE subscription_plans (
+    plan_id SERIAL PRIMARY KEY,
+    name VARCHAR(50) NOT NULL,
+    description TEXT,
+    price_monthly DECIMAL(10, 2) NOT NULL,
+    price_yearly DECIMAL(10, 2) NOT NULL,
+    features JSONB,
+    max_users INTEGER,
+    max_projects INTEGER,
+    storage_limit_gb INTEGER,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+-- User subscriptions
+CREATE TABLE user_subscriptions (
+    subscription_id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(user_id),
+    plan_id INTEGER NOT NULL REFERENCES subscription_plans(plan_id),
+    start_date DATE NOT NULL,
+    end_date DATE,
+    auto_renew BOOLEAN DEFAULT TRUE,
+    payment_status VARCHAR(20) DEFAULT 'paid',
+    last_payment_date DATE,
+    next_payment_date DATE,
+    billing_cycle VARCHAR(10) DEFAULT 'monthly',
+    CONSTRAINT chk_billing_cycle CHECK (billing_cycle IN ('monthly', 'yearly')),
+    CONSTRAINT chk_payment_status CHECK (payment_status IN ('paid', 'pending', 'failed', 'cancelled'))
+);
+
+-- Analytics projects
+CREATE TABLE projects (
+    project_id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    owner_id INTEGER NOT NULL REFERENCES users(user_id),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_modified TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_public BOOLEAN DEFAULT FALSE,
+    configuration JSONB
+);
+
+-- Project members (for collaboration)
+CREATE TABLE project_members (
+    project_id INTEGER NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    role VARCHAR(20) NOT NULL DEFAULT 'viewer',
+    joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT pk_project_members PRIMARY KEY (project_id, user_id),
+    CONSTRAINT chk_role CHECK (role IN ('owner', 'editor', 'viewer'))
+);
+
+-- Data sources
+CREATE TABLE data_sources (
+    source_id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    type VARCHAR(50) NOT NULL,
+    connection_details JSONB,
+    credentials JSONB,
+    last_sync TIMESTAMP,
+    refresh_frequency VARCHAR(20),
+    is_active BOOLEAN DEFAULT TRUE,
+    CONSTRAINT chk_refresh CHECK (refresh_frequency IN ('hourly', 'daily', 'weekly', 'monthly', 'manual'))
+);
+
+-- Analysis dashboards
+CREATE TABLE dashboards (
+    dashboard_id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    layout JSONB,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_modified TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by INTEGER NOT NULL REFERENCES users(user_id)
+);
+
+-- Dashboard visualizations
+CREATE TABLE visualizations (
+    visualization_id SERIAL PRIMARY KEY,
+    dashboard_id INTEGER NOT NULL REFERENCES dashboards(dashboard_id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    data_source_id INTEGER REFERENCES data_sources(source_id),
+    query TEXT,
+    configuration JSONB,
+    position JSONB,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_modified TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- User activity logging
+CREATE TABLE activity_log (
+    log_id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(user_id),
+    activity_type VARCHAR(50) NOT NULL,
+    entity_type VARCHAR(50),
+    entity_id INTEGER,
+    details JSONB,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes for performance
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_status ON users(account_status);
+CREATE INDEX idx_projects_owner ON projects(owner_id);
+CREATE INDEX idx_activity_user_time ON activity_log(user_id, timestamp);
+CREATE INDEX idx_subscriptions_dates ON user_subscriptions(start_date, end_date);
+CREATE INDEX idx_data_sources_project ON data_sources(project_id);
+
+-- Create view for active subscriptions
+CREATE VIEW active_subscriptions AS
+    SELECT u.user_id, u.username, u.email, sp.name as plan_name, us.start_date, us.end_date
+    FROM users u
+    JOIN user_subscriptions us ON u.user_id = us.user_id
+    JOIN subscription_plans sp ON us.plan_id = sp.plan_id
+    WHERE u.account_status = 'active'
+    AND (us.end_date IS NULL OR us.end_date >= CURRENT_DATE);
