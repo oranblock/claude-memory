@@ -1,0 +1,1 @@
+I'll continue building the Hat Detection System React component:
