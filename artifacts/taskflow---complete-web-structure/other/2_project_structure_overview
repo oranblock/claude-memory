@@ -1,0 +1,70 @@
+Copytaskflow/
+├── frontend/                      # React frontend application
+│   ├── public/                    # Static files
+│   ├── src/                       # Source code
+│   │   ├── assets/                # Images, fonts, etc.
+│   │   ├── components/            # Reusable UI components
+│   │   ├── contexts/              # React context providers
+│   │   ├── hooks/                 # Custom React hooks
+│   │   ├── pages/                 # Page components
+│   │   ├── services/              # API services
+│   │   ├── styles/                # Global styles
+│   │   ├── types/                 # TypeScript type definitions
+│   │   ├── utils/                 # Utility functions
+│   │   ├── App.tsx                # Main App component
+│   │   ├── index.tsx              # Entry point
+│   │   └── routes.tsx             # Application routes
+│   ├── .eslintrc.js               # ESLint configuration
+│   ├── .prettierrc                # Prettier configuration
+│   ├── jest.config.js             # Jest configuration
+│   ├── package.json               # Dependencies and scripts
+│   ├── tsconfig.json              # TypeScript configuration
+│   └── vite.config.ts             # Vite configuration
+│
+├── backend/                       # Express backend application
+│   ├── src/                       # Source code
+│   │   ├── config/                # Configuration files
+│   │   ├── controllers/           # Route controllers
+│   │   ├── middleware/            # Express middleware
+│   │   ├── models/                # Database models
+│   │   ├── routes/                # API routes
+│   │   ├── services/              # Business logic
+│   │   ├── types/                 # TypeScript type definitions
+│   │   ├── utils/                 # Utility functions
+│   │   ├── app.ts                 # Express app setup
+│   │   └── server.ts              # Server entry point
+│   ├── .eslintrc.js               # ESLint configuration
+│   ├── .prettierrc                # Prettier configuration
+│   ├── jest.config.js             # Jest configuration
+│   ├── nodemon.json               # Nodemon configuration
+│   ├── package.json               # Dependencies and scripts
+│   └── tsconfig.json              # TypeScript configuration
+│
+├── shared/                        # Shared code between frontend and backend
+│   ├── src/                       # Source code
+│   │   ├── constants/             # Shared constants
+│   │   ├── types/                 # Shared TypeScript types
+│   │   └── utils/                 # Shared utility functions
+│   ├── package.json               # Dependencies
+│   └── tsconfig.json              # TypeScript configuration
+│
+├── .github/                       # GitHub workflows and templates
+│   └── workflows/                 # CI/CD workflows
+│       ├── frontend.yml           # Frontend CI workflow
+│       └── backend.yml            # Backend CI workflow
+│
+├── docker/                        # Docker configuration
+│   ├── frontend/                  # Frontend Docker configuration
+│   │   └── Dockerfile             # Frontend Dockerfile
+│   ├── backend/                   # Backend Docker configuration
+│   │   └── Dockerfile             # Backend Dockerfile
+│   └── nginx/                     # Nginx configuration
+│       ├── Dockerfile             # Nginx Dockerfile
+│       └── nginx.conf             # Nginx configuration
+│
+├── .env.example                   # Example environment variables
+├── .gitignore                     # Git ignore file
+├── docker-compose.yml             # Docker Compose configuration
+├── package.json                   # Root package.json for workspaces
+├── README.md                      # Project documentation
+└── tsconfig.json                  # Root TypeScript configuration
